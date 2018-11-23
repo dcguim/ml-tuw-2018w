@@ -1,0 +1,8 @@
+data_file: 'cup98ID.shuf.5000.train.csv'
+feat_selection:
+    method: 'dt'
+    hardcoded_feats:
+        - "ola"
+        - "ola1"
+        - "ola2"
+target: 'TARGET_B'
