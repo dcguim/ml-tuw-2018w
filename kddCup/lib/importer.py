@@ -16,3 +16,9 @@ class Importer:
         return pd.read_csv('kddCup/data/' + cfg['data_file'], sep=',',
                            error_bad_lines=False, low_memory=False,
                            keep_default_na=True, verbose=True)
+    @staticmethod
+    def get_test_dat(cfg):
+        """Load raw data as a panda data frame"""
+        return pd.read_csv('kddCup/data/' + cfg['test_file'], sep=',',
+                           error_bad_lines=False, low_memory=False,
+                           keep_default_na=True, verbose=True)

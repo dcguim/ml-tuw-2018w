@@ -1,4 +1,5 @@
 data_file: 'cup98ID.shuf.5000.train.csv'
+test_file: 'cup98ID.shuf.5000.test.csv'
 feat_selection:
     method: 'dt'
     hardcoded_feats:

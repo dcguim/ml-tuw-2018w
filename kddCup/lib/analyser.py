@@ -87,14 +87,14 @@ class Analyser:
 
         # Computes correlation between cfg['target'] and the predictors
         target_corr = X.corr()[cfg['target']].copy()
-        target_corr.sort_values(ascending = False)
+        target_corr = target_corr.sort_values(ascending = False)
 
         # Sorts and picks the first x features
         # TODO: get optimal x value automatically
-        tmp = abs(target_corr).copy()
-        tmp.sort_values(ascending = False)
+        tmp = target_corr.abs()
+        tmp = tmp.sort_values(ascending = False)
         important_vars = [tmp.index[0]]
-        important_vars.extend(list(tmp.index[2:52])) # removes other target
+        important_vars.extend(list(tmp.index[1:52])) # removes other target
 
         #### Variance-based Feature Selection ####
 
