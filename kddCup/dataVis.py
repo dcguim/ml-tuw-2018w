@@ -13,6 +13,8 @@ from pydoc import help
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import ExtraTreesClassifier
 from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import GaussianNB
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.feature_selection import chi2, SelectKBest, VarianceThreshold
 
 # Reads project's classes
@@ -97,27 +99,27 @@ def get_important_vars(target, dat):
         tmp = target_corr.abs()
         tmp = tmp.sort_values(ascending = False)
         important_vars = [tmp.index[0]]
-        important_vars.extend(list(tmp.index[1:100]))
+        important_vars.extend(list(tmp.index[1:60]))
 
         #### Variance-based Feature Selection ####
 
-        #sel = VarianceThreshold(threshold = 0.005)
-        #X_new = sel.fit_transform(X)
+        # sel = VarianceThreshold(threshold = 0.005)
+        # X_new = sel.fit_transform(X)
 
-        #### Univariate Feature Selection ####
-
-        #y = X.TARGET_B
-        #X = X.drop("TARGET_B", axis = 1)
-
-        #X_new = SelectKBest(chi2, k = 10).fit_transform(X.values, y.values)
-
-        #### Tree-based Feature Selection ####
-
-        #clf = ExtraTreesClassifier()
-        #X_new = clf.fit(X.values, y.values).transform(X.values)
-
-        #aux = dict(zip(X.columns, clf.feature_importances_))
-        #important_vars = [i[0] for i in sorted(
+        ### Univariate Feature Selection ####
+        #
+        # y = X.TARGET_B
+        # X = X.drop("TARGET_B", axis = 1)
+        # #
+        # # X_new = SelectKBest(chi2, k = 10).fit_transform(X.values, y.values)
+        #
+        # #### Tree-based Feature Selection ####
+        # #
+        # clf = ExtraTreesClassifier()
+        # X_new = clf.fit(X.values, y.values)
+        #
+        # aux = dict(zip(X.columns, clf.feature_importances_))
+        # important_vars = [i[0] for i in sorted(
         #    aux.items(), key = operator.itemgetter(0))]
 
         return important_vars
@@ -207,11 +209,12 @@ def main():
     redundant_vars = get_redundant_vars(target, raw_dat)
 
     print(redundant_vars)
-    print(redundant_vars[1:])
+    print(redundant_vars)
 
     #drop redundant variables
     dat = raw_dat.drop(redundant_vars, axis=1)
-    test_data = test_raw_dat.drop(redundant_vars[1:], axis=1)
+    cn = test_raw_dat.CONTROLN
+    test_data = test_raw_dat.drop(redundant_vars, axis=1)
 
     dat = DataFrameImputer().fit_transform(dat)
     test_data = DataFrameImputer().fit_transform(test_data)
@@ -224,13 +227,13 @@ def main():
 
     # Changes categorical vars to a numerical form
     feats = pd.get_dummies(dat)
-    feats_test = pd.get_dummies(test_data)
+    feats_test_dat = pd.get_dummies(test_data)
 
     # Drops the non-important variables
     feats = feats[important_vars]
-    control= test_data.CONTROLN
-    control_feats = feats_test.CONTROLN
-    feats_test = feats_test[important_vars[1:]]
+    # control= test_data.CONTROLN
+    # control_feats = feats_test.CONTROLN
+    final_test_dat = feats_test_dat[important_vars[1:]]
 
     # Does train/test datasets, 70% and 30% respectively
     cut = int(feats.shape[0] * .7)
@@ -241,6 +244,9 @@ def main():
     test = feats[(cut + 1):-1].drop(['TARGET_B'], axis=1)
     y_test = feats.TARGET_B[(cut + 1):-1]
 
+    train_all = feats.drop(['TARGET_B'], axis=1)
+    y_train_all = feats.TARGET_B
+
     # Creates a balanced trainset
     # In classification, some methods perform better with bal datasets,
     # particularly tree-based methods like decision trees and random forests.
@@ -249,6 +255,12 @@ def main():
     y_train_bal = [1] * pos.shape[0]
     y_train_bal.extend([0] * neg.shape[0])
     train_bal = pos.append(neg, ignore_index=True)
+
+    pos_all = train_all[y_train_all == 1]
+    neg_all = train_all[y_train_all == 0][1:pos.shape[0]]
+    y_train_all_bal = [1] * pos_all.shape[0]
+    y_train_all_bal.extend([0] * neg_all.shape[0])
+    train_all_bal = pos_all.append(neg, ignore_index=True)
 
     #### Training ####
 
@@ -264,12 +276,14 @@ def main():
     # Testing
     y_test_pred = clf.predict(test.values)
     y_all_models = y_test_pred.copy()
-    y_real_test = clf.predict(feats_test.values)
+
+    y_real_test = clf.predict(final_test_dat.values)
+    y_real_all_models = y_real_test.copy()
 
     y_result = pd.DataFrame({'TARGET_B': y_real_test})
-    cn = pd.DataFrame(control)
-    final_result = pd.concat([cn, y_result], axis=1)
-    final_result.to_csv('result1.csv', sep='\t', encoding='utf-8')
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result1.csv', sep=',', encoding='utf-8', index=False)
 
     # Confusion Matrix
     print(pd.crosstab(
@@ -284,23 +298,29 @@ def main():
     print("Model 2 executing...")
 
     # Training
-    clf = ExtraTreesClassifier(n_estimators=500, verbose=1,
+    clf = ExtraTreesClassifier(n_estimators=5000, verbose=1,
                                bootstrap=True, max_depth=30, oob_score=True, n_jobs=-1)
 
     # clf = RandomForestClassifier(
     #    n_estimators = 500, max_depth = 10, verbose = 1, n_jobs = -1)
 
+    #train
     clf = clf.fit(train_bal.values, y_train_bal)
+
+    # train on all the data set
+    #clf = clf.fit(train_all_bal.values, y_train_all_bal)
 
     # Testing
     y_test_pred = clf.predict(test.values)
-    y_real_test = clf.predict(feats_test.values)
     y_all_models += y_test_pred
 
+    y_real_test = clf.predict(final_test_dat.values)
+    y_real_all_models += y_real_test
+
     y_result = pd.DataFrame({'TARGET_B': y_real_test})
-    cn = pd.DataFrame(control)
-    final_result = pd.concat([cn, y_result], axis=1)
-    final_result.to_csv('result2.csv', sep='\t', encoding='utf-8')
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result2.csv', sep=',', encoding='utf-8', index=False)
 
     # Confusion Matrix
     print(pd.crosstab(
@@ -322,12 +342,13 @@ def main():
     y_test_pred = clf.predict(test.values)
     y_all_models += y_test_pred
 
-    y_real_test = clf.predict(feats_test.values)
+    y_real_test = clf.predict(final_test_dat.values)
+    y_real_all_models += y_real_test
 
     y_result = pd.DataFrame({'TARGET_B': y_real_test})
-    cn = pd.DataFrame(control)
-    final_result = pd.concat([cn, y_result], axis=1)
-    final_result.to_csv('result3.csv', sep='\t', encoding='utf-8')
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result2.csv', sep=',', encoding='utf-8', index=False)
 
     # Confusion Matrix
     print(pd.crosstab(
@@ -336,21 +357,74 @@ def main():
     # Gets performance
     perf_model3 = Performance.get_perf(y_test, y_test_pred)
 
-    #### Model 4 | Ensemble Model (majority vote for model 1, 2 and 3) ####
 
-    print("Model 4 executing...")
+    ### Model 4 | naive bayes
+    print("Model 4 Naive Bayes executing...")
+
+    gnb = GaussianNB()
+    gnb = gnb.fit(train_bal.values, y_train_bal)
+
+    y_test_pred = gnb.predict(test.values)
+    y_all_models += y_test_pred
+
+    y_real_test = gnb.predict(final_test_dat.values)
+    y_real_all_models += y_real_test
+
+    y_result = pd.DataFrame({'TARGET_B': y_real_test})
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result4.csv', sep='\t', encoding='utf-8')
+
+    # Gets performance
+    perf_model4 = Performance.get_perf(y_test, y_test_pred)
+
+    # Confusion Matrix
+    print(pd.crosstab(
+        y_test, y_test_pred, rownames=['actual'], colnames=['preds']))
+
+
+    ### Model 5 | knn
+    print("Model 5 knn executing...")
+
+    k_classifier = KNeighborsClassifier(n_neighbors=6)
+    k_classifier.fit(train_bal, y_train_bal)
+
+    y_test_pred = k_classifier.predict(test)
+    y_all_models += y_test_pred
+
+    y_real_test = k_classifier.predict(final_test_dat)
+    y_real_all_models += y_real_test
+
+    y_result = pd.DataFrame({'TARGET_B': y_real_test})
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result5.csv', sep=',', encoding='utf-8', index=False)
+
+    # Gets performance
+    perf_model5 = Performance.get_perf(y_test, y_test_pred)
+
+    # Confusion Matrix
+    print(pd.crosstab(
+        y_test, y_test_pred, rownames=['actual'], colnames=['preds']))
+
+
+    #### Model 6 | Ensemble Model (majority vote for model 1, 2 and 3) ####
+
+    print("Model 6 executing...")
 
     # Gets performance for an ensemble of all 3 models
     y_test_pred = np.array([0] * len(y_all_models))
-    y_test_pred[y_all_models > 1] = 1
+    y_test_pred[y_all_models > 2] = 1
     perf_model_ensemble = Performance.get_perf(y_test, y_test_pred)
 
-    y_real_test = clf.predict(feats_test.values)
+    y_real_test = np.array([0] * len(y_real_all_models))
+    y_real_test[y_real_all_models > 4] = 1
 
     y_result = pd.DataFrame({'TARGET_B': y_real_test})
-    cn = pd.DataFrame(control)
-    final_result = pd.concat([cn, y_result], axis=1)
-    final_result.to_csv('result4.csv', sep='\t', encoding='utf-8')
+    cn_df = pd.DataFrame(cn)
+    final_result = pd.concat([cn_df, y_result], axis=1)
+    final_result.to_csv('result6.csv', sep=',', encoding='utf-8', index=False)
+
 
     # Confusion Matrix
     print(pd.crosstab(
@@ -361,7 +435,11 @@ def main():
     all_models = {'Decision Trees Model': perf_model1,
                   'Random Forest Model': perf_model2,
                   'Logistic Regression Model': perf_model3,
-                  'Ensemble Model': perf_model_ensemble}
+                  'Naive Bayes Model': perf_model4,
+                  'knn Model': perf_model5,
+                  'Ensemble Model': perf_model_ensemble
+                  }
+
 
     perf_all_models = pd.DataFrame([[col1, col2, col3 * 100] for col1, d in
                                     all_models.items() for col2, col3 in d.items()], index=None,
